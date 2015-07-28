@@ -1,4 +1,4 @@
-package uk.org.llgc.annotation.store;
+package uk.org.llgc.annotation.store.adapters;
 
 import com.hp.hpl.jena.tdb.TDBFactory;
 import com.hp.hpl.jena.rdf.model.Model;
@@ -17,6 +17,8 @@ import com.hp.hpl.jena.query.ResultSet;
 import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.Lang;
 
+import uk.org.llgc.annotation.store.data.PageAnnoCount;
+
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
@@ -30,11 +32,11 @@ import com.github.jsonldjava.utils.JsonUtils;
 
 import java.nio.charset.Charset;
 
-public class StoreAdapter {
+public class JenaStore extends AbstractStoreAdapter implements StoreAdapter {
 	protected Dataset _dataset = null;
 
-	public StoreAdapter(final Dataset pData) {
-		_dataset = pData;
+	public JenaStore(final String pDataDir) {
+		_dataset = TDBFactory.createDataset(pDataDir);
 	}
 
 	public Model addAnnotation(final Map<String,Object> pJson) throws IOException {
@@ -76,7 +78,20 @@ public class StoreAdapter {
 		_dataset.commit();
 	}
 
-	public List<Model> getAnnotationsFromPage(final String pPageId) {
+	protected QueryExecution getQueryExe(final String pQuery) {
+		return QueryExecutionFactory.create(pQuery, _dataset);
+	}
+	protected Model getNamedModel(final String pContext) throws IOException {
+		return _dataset.getNamedModel(pContext);
+	}
+
+	protected void begin(final ReadWrite pWrite) {
+		_dataset.begin(pWrite);
+	}
+	protected void end() {
+		_dataset.end();
+	}
+	/*public List<Model> getAnnotationsFromPage(final String pPageId) {
 		String tQueryString = "select ?annoId ?graph where {" 
 										+ " GRAPH ?graph { ?on <http://www.w3.org/ns/oa#hasSource> <" + pPageId + "> ."
 										+ " ?annoId <http://www.w3.org/ns/oa#hasTarget> ?on } "
@@ -99,4 +114,30 @@ public class StoreAdapter {
 
 		return tAnnotations;
 	}
+
+	public List<PageAnnoCount> listAnnoPages() {
+		String tQueryString = "select ?pageId (count(?annoId) as ?count) where {" 
+										+ " GRAPH ?graph { ?on <http://www.w3.org/ns/oa#hasSource> ?pageId ."
+										+ " ?annoId <http://www.w3.org/ns/oa#hasTarget> ?on } "
+									+ "}group by ?pageId order by ?pageId";
+
+		Query tQuery = QueryFactory.create(tQueryString);
+		QueryExecution tExec = QueryExecutionFactory.create(tQuery, _dataset);
+
+		_dataset.begin(ReadWrite.READ);
+		ResultSet results = tExec.execSelect(); // Requires Java 1.7
+		int i = 0;
+		List<PageAnnoCount> tAnnotations = new ArrayList<PageAnnoCount>();
+		while (results.hasNext()) {
+			QuerySolution soln = results.nextSolution() ;
+			Resource tPageId = soln.getResource("pageId") ; // Get a result variable - must be a resource
+			int tCount = soln.getLiteral("count").getInt();
+			System.out.println("Found " + tPageId + " count " + tCount);
+
+			tAnnotations.add(new PageAnnoCount(tPageId.getURI(), tCount));
+		} 
+		_dataset.end();
+
+		return tAnnotations;
+	}*/
 }
